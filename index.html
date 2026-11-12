@@ -1,0 +1,341 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open World City Game</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;font-family:Arial;background:#87ceeb}
+canvas{display:block}
+#hud{
+ position:fixed;top:15px;left:15px;
+ color:white;background:#111b;padding:14px;
+ border-radius:12px;z-index:5;
+}
+#enter{
+ position:fixed;right:20px;bottom:100px;
+ padding:15px 22px;background:#00c8ff;
+ border:0;border-radius:12px;font-weight:bold;
+}
+#controls{
+ position:fixed;bottom:20px;left:20px;
+ display:grid;grid-template-columns:55px 55px 55px;
+ gap:6px;z-index:5;
+}
+button{cursor:pointer}
+.control{
+ height:50px;border:0;border-radius:10px;
+ background:#172bdb;color:white;font-size:20px;
+}
+#right{
+ position:fixed;bottom:20px;right:20px;
+ display:flex;gap:8px;z-index:5;
+}
+#right button{padding:15px;border:0;
+ border-radius:10px;background:#222;color:white}
+#message{
+ position:fixed;top:50%;left:50%;
+ transform:translate(-50%,-50%);
+ color:white;font-size:25px;display:none;
+ text-align:center;z-index:10
+}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <b>🏙️ OPEN WORLD CITY</b><br>
+ <span id="status">Player Mode</span><br>
+ 🚗 Car: Available
+</div>
+
+<button id="enter">ENTER CAR</button>
+
+<div id="controls">
+ <div></div><button class="control" data-key="w">⬆</button><div></div>
+ <button class="control" data-key="a">⬅</button>
+ <button class="control" data-key="s">⬇</button>
+ <button class="control" data-key="d">➡</button>
+</div>
+
+<div id="right">
+ <button id="jump">JUMP</button>
+ <button id="camera">CAMERA</button>
+</div>
+
+<div id="message">WELCOME TO THE CITY!</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
+scene.fog=new THREE.Fog(0x87ceeb,35,180);
+
+const camera=new THREE.PerspectiveCamera(
+ 70,innerWidth/innerHeight,0.1,500
+);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x667755,2));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(20,40,20);
+sun.castShadow=true;
+scene.add(sun);
+
+function box(x,y,z,w,h,d,color){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),
+  new THREE.MeshStandardMaterial({color})
+ );
+ m.position.set(x,y,z);
+ m.castShadow=true;
+ m.receiveShadow=true;
+ scene.add(m);
+ return m;
+}
+
+// Ground
+box(0,-0.5,0,200,1,200,0x419447);
+
+// Roads
+for(let i=-80;i<=80;i+=40){
+ box(i,0.01,0,12,0.05,200,0x333333);
+ box(0,0.02,i,200,0.05,12,0x333333);
+}
+
+// Road markings
+for(let i=-90;i<100;i+=8){
+ box(i,0.06,0,3,0.03,0.18,0xffffff);
+ box(0,0.06,i,0.18,0.03,3,0xffffff);
+}
+
+// City buildings
+for(let x=-80;x<=80;x+=20){
+ for(let z=-80;z<=80;z+=20){
+  if(Math.abs(x)<12 || Math.abs(z)<12)continue;
+  let h=8+Math.random()*24;
+  let colors=[0x9aa5b1,0xe4b98b,0x667788,0xc4c4c4];
+  box(x,h/2,z,10,h,10,
+  colors[Math.floor(Math.random()*colors.length)]);
+ }
+}
+
+// Player body
+const player=new THREE.Group();
+scene.add(player);
+
+const skin=new THREE.MeshStandardMaterial({color:0xd69b70});
+const shirt=new THREE.MeshStandardMaterial({color:0x1765db});
+const pants=new THREE.MeshStandardMaterial({color:0x222d42});
+
+function limb(parent,x,y,z,w,h,d,mat){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),mat
+ );
+ m.position.set(x,y,z);
+ m.castShadow=true;
+ parent.add(m);
+ return m;
+}
+
+limb(player,0,1.65,0,0.65,0.9,0.35,shirt);
+const head=new THREE.Mesh(
+ new THREE.SphereGeometry(0.25,16,16),skin
+);
+head.position.y=2.35;
+player.add(head);
+
+// Arms
+const arms=[];
+arms.push(limb(player,-0.48,1.55,0,0.19,0.85,0.2,skin));
+arms.push(limb(player,0.48,1.55,0,0.19,0.85,0.2,skin));
+
+// Legs
+const legs=[];
+legs.push(limb(player,-0.19,0.65,0,0.25,0.85,0.27,pants));
+legs.push(limb(player,0.19,0.65,0,0.25,0.85,0.27,pants));
+
+// Shoes
+limb(player,-0.19,0.15,0.08,0.3,0.2,0.45,0x111111);
+limb(player,0.19,0.15,0.08,0.3,0.2,0.45,0x111111);
+
+// Car
+const car=new THREE.Group();
+scene.add(car);
+
+boxCar(0,0,0);
+function boxCar(x,y,z){
+ const body=new THREE.Mesh(
+  new THREE.BoxGeometry(2.6,0.8,4.5),
+  new THREE.MeshStandardMaterial({color:0xe32636})
+ );
+ body.position.set(x,y+0.7,z);
+ body.castShadow=true;
+ car.add(body);
+
+ const top=new THREE.Mesh(
+  new THREE.BoxGeometry(2,0.8,2),
+  new THREE.MeshStandardMaterial({color:0x222f44})
+ );
+ top.position.set(0,1.45,-0.3);
+ car.add(top);
+
+ const wheels=[];
+ for(let x of [-1.3,1.3]){
+  for(let z of [-1.4,1.4]){
+   const wheel=new THREE.Mesh(
+    new THREE.CylinderGeometry(.42,.42,.25,20),
+    new THREE.MeshStandardMaterial({color:0x111111})
+   );
+   wheel.rotation.z=Math.PI/2;
+   wheel.position.set(x,.4,z);
+   car.add(wheel);
+   wheels.push(wheel);
+  }
+ }
+ car.userData.wheels=wheels;
+}
+car.position.set(7,0,5);
+
+// Controls
+let keys={};
+let inCar=false;
+let speed=0;
+let angle=0;
+let jump=0;
+let cameraMode=0;
+
+addEventListener('keydown',e=>{
+ keys[e.key.toLowerCase()]=true;
+ if(e.key.toLowerCase()==='e')toggleCar();
+ if(e.code==='Space'&&!inCar)jump=0.18;
+});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+document.querySelectorAll('[data-key]').forEach(b=>{
+ const k=b.dataset.key;
+ b.addEventListener('pointerdown',()=>keys[k]=true);
+ b.addEventListener('pointerup',()=>keys[k]=false);
+ b.addEventListener('pointerleave',()=>keys[k]=false);
+});
+
+document.getElementById('jump').onclick=()=>{
+ if(!inCar)jump=0.18;
+};
+
+document.getElementById('enter').onclick=toggleCar;
+
+function toggleCar(){
+ if(!inCar){
+  if(player.position.distanceTo(car.position)<5){
+   inCar=true;
+   player.visible=false;
+   speed=0;
+  }else{
+   document.getElementById('status').textContent=
+   'Move closer to the car!';
+  }
+ }else{
+  inCar=false;
+  player.visible=true;
+  player.position.set(
+   car.position.x+3,0,car.position.z
+  );
+ }
+ document.getElementById('status').textContent=
+ inCar?'Driving Mode':'Player Mode';
+ document.getElementById('enter').textContent=
+ inCar?'EXIT CAR':'ENTER CAR';
+}
+
+document.getElementById('camera').onclick=()=>{
+ cameraMode=1-cameraMode;
+};
+
+// Animation
+let clock=new THREE.Clock();
+
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),0.04);
+
+ let forward=keys.w||keys.arrowup;
+ let backward=keys.s||keys.arrowdown;
+ let left=keys.a||keys.arrowleft;
+ let right=keys.d||keys.arrowright;
+
+ if(inCar){
+  if(forward)speed=Math.min(speed+dt*9,18);
+  else if(backward)speed=Math.max(speed-dt*9,-8);
+  else speed*=0.96;
+
+  if(left)angle+=dt*1.7*(speed>=0?1:-1);
+  if(right)angle-=dt*1.7*(speed>=0?1:-1);
+
+  car.rotation.y=angle;
+  car.position.x+=Math.sin(angle)*speed*dt;
+  car.position.z+=Math.cos(angle)*speed*dt;
+
+  car.userData.wheels.forEach(w=>{
+   w.rotation.x+=speed*dt*2;
+  });
+
+ }else{
+  let move=0;
+  if(forward)move=7;
+  if(backward)move=-7;
+  if(left)player.rotation.y+=dt*2.5;
+  if(right)player.rotation.y-=dt*2.5;
+
+  player.position.x+=Math.sin(player.rotation.y)*move*dt;
+  player.position.z+=Math.cos(player.rotation.y)*move*dt;
+
+  if(move!==0){
+   legs[0].rotation.x=Math.sin(clock.elapsedTime*10)*.5;
+   legs[1].rotation.x=-Math.sin(clock.elapsedTime*10)*.5;
+   arms[0].rotation.x=-legs[0].rotation.x;
+   arms[1].rotation.x=-legs[1].rotation.x;
+  }else{
+   legs.forEach(l=>l.rotation.x=0);
+   arms.forEach(a=>a.rotation.x=0);
+  }
+
+  if(jump>0){
+   player.position.y+=jump*0.5;
+   jump-=dt;
+  }else{
+   player.position.y=Math.max(0,player.position.y-dt*2);
+  }
+ }
+
+ const target=inCar?car.position:player.position;
+ const rotation=inCar?angle:player.rotation.y;
+ const distance=cameraMode?5:8;
+
+ const desired=new THREE.Vector3(
+  target.x-Math.sin(rotation)*distance,
+  target.y+4,
+  target.z-Math.cos(rotation)*distance
+ );
+
+ camera.position.lerp(desired,0.08);
+ camera.lookAt(target.x,target.y+1,target.z);
+
+ renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
